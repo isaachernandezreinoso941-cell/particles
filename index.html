@@ -1,0 +1,1792 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Particle Flow - Hand Tracking</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    overflow: hidden;
+    background: #000;
+    font-family: 'Segoe UI', sans-serif;
+    cursor: none;
+}
+#canvas3d {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 2;
+}
+#webcamVideo {
+    position: fixed;
+    top: 0; left: 0;
+    width: 1px; height: 1px;
+    opacity: 0;
+    pointer-events: none;
+    z-index: -1;
+}
+#startScreen {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #0a0015 0%, #1a0030 50%, #000520 100%);
+}
+#startScreen h1 {
+    font-size: 4rem;
+    background: linear-gradient(90deg, #ff006e, #8338ec, #3a86ff, #06d6a0, #ffbe0b);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-size: 300% 100%;
+    animation: gradientShift 3s ease infinite;
+    margin-bottom: 10px;
+}
+@keyframes gradientShift {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+}
+#startScreen p {
+    color: #aaa;
+    font-size: 1.2rem;
+    margin-bottom: 40px;
+}
+#startBtn {
+    padding: 18px 50px;
+    font-size: 1.3rem;
+    background: linear-gradient(135deg, #8338ec, #3a86ff);
+    color: white;
+    border: none;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 0 30px rgba(131,56,236,0.4);
+}
+#startBtn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 50px rgba(131,56,236,0.7);
+}
+#ui {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    display: none;
+    text-align: center;
+}
+#ui .status {
+    color: #fff;
+    font-size: 0.9rem;
+    background: rgba(0,0,0,0.5);
+    padding: 8px 20px;
+    border-radius: 20px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.1);
+}
+#controls {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    display: none;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 95vw;
+}
+#controls button {
+    padding: 10px 20px;
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 25px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    backdrop-filter: blur(10px);
+    transition: all 0.3s;
+}
+#controls button:hover, #controls button.active {
+    background: rgba(131,56,236,0.5);
+    border-color: #8338ec;
+}
+#particleMenu {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 10;
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+}
+#particleMenu .menu-title {
+    color: #888;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 2px;
+}
+#particleMenu button {
+    padding: 8px 16px;
+    background: rgba(255,255,255,0.07);
+    color: #ccc;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    backdrop-filter: blur(10px);
+    transition: all 0.3s;
+    text-align: left;
+}
+#particleMenu button:hover {
+    background: rgba(131,56,236,0.3);
+    border-color: rgba(131,56,236,0.5);
+    color: #fff;
+}
+#particleMenu button.active {
+    background: rgba(131,56,236,0.5);
+    border-color: #8338ec;
+    color: #fff;
+}
+#score {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10;
+    color: #fff;
+    font-size: 1.1rem;
+    display: none;
+    text-align: right;
+}
+#score .val {
+    font-size: 2rem;
+    font-weight: bold;
+    background: linear-gradient(90deg, #ffbe0b, #ff006e);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+#loading {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 200;
+    background: #000;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+}
+#loading .spinner {
+    width: 50px; height: 50px;
+    border: 3px solid rgba(255,255,255,0.1);
+    border-top-color: #8338ec;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 20px;
+}
+#faceBtn {
+    position: fixed;
+    bottom: 60px;
+    right: 20px;
+    z-index: 10;
+    display: none;
+    padding: 12px 22px;
+    background: rgba(255,255,255,0.07);
+    color: #ccc;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 25px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    backdrop-filter: blur(10px);
+    transition: all 0.3s;
+}
+#faceBtn:hover { background: rgba(58,134,255,0.3); border-color: #3a86ff; color: #fff; }
+#faceBtn.active { background: rgba(58,134,255,0.5); border-color: #3a86ff; color: #fff; }
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div id="startScreen">
+    <h1>Particle Flow</h1>
+    <p>Controla particulas magicas con tu mano</p>
+    <button id="startBtn">Activar Camara</button>
+</div>
+
+<div id="loading">
+    <div class="spinner"></div>
+    <p>Cargando modelo de manos...</p>
+</div>
+
+<video id="webcamVideo" autoplay playsinline></video>
+<canvas id="canvas3d"></canvas>
+
+<div id="ui">
+    <div class="status" id="statusText">Buscando mano...</div>
+</div>
+
+<div id="score">
+    <div>Particulas</div>
+    <div class="val" id="particleCount">0</div>
+</div>
+
+<div id="particleMenu">
+    <div class="menu-title">Cantidad</div>
+    <button data-count="200">200</button>
+    <button data-count="500">500</button>
+    <button data-count="1000" class="active">1,000</button>
+    <button data-count="2000">2,000</button>
+    <button data-count="4000">4,000</button>
+    <button data-count="8000">8,000</button>
+</div>
+
+<button id="faceBtn">Modo Rostro</button>
+
+<div id="controls">
+    <button class="active" data-mode="rainbow">Arcoiris</button>
+    <button data-mode="fire">Fuego</button>
+    <button data-mode="ice">Hielo</button>
+    <button data-mode="galaxy">Galaxia</button>
+    <button data-mode="neon">Neon</button>
+    <button data-mode="redblue">Rojo & Azul</button>
+</div>
+
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+    }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+// --- CONFIG ---
+let PARTICLE_COUNT = 1000;
+const TRAIL_LENGTH = 60;
+const BOUNDS = { x: 5, y: 3.5, z: 4 };
+
+// --- COLOR MODES ---
+const colorModes = {
+    rainbow: (t) => {
+        const c = new THREE.Color();
+        c.setHSL((t * 0.5 + performance.now() * 0.0001) % 1, 1, 0.6);
+        return c;
+    },
+    fire: (t) => {
+        const c = new THREE.Color();
+        c.setHSL(0.02 + t * 0.08, 1, 0.4 + t * 0.3);
+        return c;
+    },
+    ice: (t) => {
+        const c = new THREE.Color();
+        c.setHSL(0.55 + t * 0.1, 0.8, 0.5 + t * 0.3);
+        return c;
+    },
+    galaxy: (t) => {
+        const c = new THREE.Color();
+        const r = (t * 3) % 3;
+        if (r < 1) c.setHSL(0.75, 0.9, 0.7);
+        else if (r < 2) c.setHSL(0.85, 1, 0.5);
+        else c.setHSL(0.6, 0.6, 0.9);
+        return c;
+    },
+    neon: (t) => {
+        const c = new THREE.Color();
+        const hues = [0.3, 0.5, 0.83, 0.95, 0.15];
+        c.setHSL(hues[Math.floor(t * 5) % hues.length], 1, 0.55);
+        return c;
+    },
+    redblue: (t) => {
+        const c = new THREE.Color();
+        if ((t * 10) % 2 < 1) c.setHSL(0.0, 1, 0.5);
+        else c.setHSL(0.62, 1, 0.5);
+        return c;
+    }
+};
+
+let currentMode = 'rainbow';
+
+// --- GLOBALS ---
+let scene, camera, renderer;
+let particles = [];
+let burstParticles = [];
+
+// Two hands support
+const hands = [
+    { pos: {x:0,y:0,z:0}, prevPos: {x:0,y:0,z:0}, detected: false, velocity: 0, fingers: [], isFist: false, isRock: false, isPinky: false, landmarks3D: [] },
+    { pos: {x:0,y:0,z:0}, prevPos: {x:0,y:0,z:0}, detected: false, velocity: 0, fingers: [], isFist: false, isRock: false, isPinky: false, landmarks3D: [] }
+];
+// Legacy compat shortcuts (point to hand 0 or combined)
+let handPos = { x: 0, y: 0, z: 0 };
+let handDetected = false;
+let handVelocity = 0;
+let fingerPositions = [];
+let isFist = false;
+let isRock = false;
+let isPinky = false;
+let pinkyModeActive = false;
+let wasPinkyGesture = [false, false];
+let pinkyActivateTime = 0;
+const PINKY_DURATION = 30; // seconds
+
+// Face mode
+let faceMode = false;
+let faceLandmarker = null;
+let faceTargets = []; // cached face target positions
+let lastFaceDetectTime = 0;
+let trailPoints = [[], []]; // one trail per hand
+
+// --- THREE.JS SETUP ---
+let pointLight1, pointLight2, handLight;
+
+function initThree() {
+    scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x050510, 0.06);
+
+    camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(0, 0, 6);
+
+    renderer = new THREE.WebGLRenderer({
+        canvas: document.getElementById('canvas3d'),
+        alpha: false,
+        antialias: true
+    });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(0x050510, 1);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
+
+    scene.add(new THREE.AmbientLight(0x111122, 0.3));
+
+    const dirLight = new THREE.DirectionalLight(0x6644aa, 0.4);
+    dirLight.position.set(2, 3, 4);
+    scene.add(dirLight);
+
+    pointLight1 = new THREE.PointLight(0xff006e, 2, 12);
+    pointLight1.position.set(-2, 1, 2);
+    scene.add(pointLight1);
+
+    pointLight2 = new THREE.PointLight(0x3a86ff, 2, 12);
+    pointLight2.position.set(2, -1, 2);
+    scene.add(pointLight2);
+
+    handLight = new THREE.PointLight(0xffffff, 3, 6);
+    handLight.position.set(0, 0, 2);
+    scene.add(handLight);
+
+    // Depth grid planes
+    for (let z = -6; z <= 0; z += 2) {
+        const planeGeo = new THREE.PlaneGeometry(16, 12, 20, 15);
+        const planeMat = new THREE.MeshStandardMaterial({
+            color: 0x0a0a1a, wireframe: true, transparent: true,
+            opacity: 0.04 + (z + 6) * 0.01, metalness: 0.5, roughness: 0.8
+        });
+        const plane = new THREE.Mesh(planeGeo, planeMat);
+        plane.position.z = z;
+        scene.add(plane);
+    }
+
+    // Floor
+    const floorGeo = new THREE.PlaneGeometry(20, 20, 30, 30);
+    const floorMat = new THREE.MeshStandardMaterial({
+        color: 0x0a0a20, wireframe: true, transparent: true,
+        opacity: 0.08, metalness: 0.8, roughness: 0.3
+    });
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -3;
+    floor.position.z = -2;
+    scene.add(floor);
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+}
+
+// --- LINE PARTICLE SYSTEM (FIXED COUNT) ---
+
+function createLineMesh(color, length) {
+    const a1 = Math.random() * Math.PI * 2;
+    const a2 = Math.random() * Math.PI;
+    const dx = Math.sin(a2) * Math.cos(a1) * length;
+    const dy = Math.sin(a2) * Math.sin(a1) * length;
+    const dz = Math.cos(a2) * length;
+    const geo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(-dx, -dy, -dz),
+        new THREE.Vector3(dx, dy, dz)
+    ]);
+    const mat = new THREE.LineBasicMaterial({
+        color, transparent: true, opacity: 1
+    });
+    return new THREE.Line(geo, mat);
+}
+
+function spawnFixedParticles(count) {
+    // Remove old
+    for (const p of particles) {
+        scene.remove(p.mesh);
+        p.mesh.geometry.dispose();
+        p.mesh.material.dispose();
+    }
+    particles = [];
+
+    for (let i = 0; i < count; i++) {
+        const t = i / count;
+        const color = colorModes[currentMode](t);
+        const length = 0.04 + Math.random() * 0.12;
+        const mesh = createLineMesh(color, length);
+
+        // Random position across the whole space
+        mesh.position.set(
+            (Math.random() - 0.5) * BOUNDS.x * 2,
+            (Math.random() - 0.5) * BOUNDS.y * 2,
+            (Math.random() - 0.5) * BOUNDS.z * 2
+        );
+        scene.add(mesh);
+
+        const angle = Math.random() * Math.PI * 2;
+        const phi = Math.random() * Math.PI;
+        const speed = 0.005 + Math.random() * 0.015;
+
+        particles.push({
+            mesh,
+            vx: Math.sin(phi) * Math.cos(angle) * speed,
+            vy: Math.sin(phi) * Math.sin(angle) * speed,
+            vz: Math.cos(phi) * speed,
+            baseColor: color.clone(),
+            length,
+            spin: (Math.random() - 0.5) * 0.08,
+            idx: i,
+            wanderAngle: Math.random() * Math.PI * 2,
+            wanderSpeed: 0.01 + Math.random() * 0.02
+        });
+    }
+}
+
+function setParticleCount(count) {
+    PARTICLE_COUNT = count;
+    spawnFixedParticles(count);
+    document.getElementById('particleCount').textContent = count;
+}
+
+function updateParticles(dt, time) {
+    for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+        const t = i / particles.length;
+
+        // Face mode overrides everything
+        if (faceMode && faceTargets.length > 0) {
+            const ti = i % faceTargets.length;
+            const target = faceTargets[ti];
+            const tdx = target.x - p.mesh.position.x;
+            const tdy = target.y - p.mesh.position.y;
+            const tdz = target.z - p.mesh.position.z;
+            const pullForce = 0.02 + 0.04 / Math.max(Math.sqrt(tdx*tdx+tdy*tdy+tdz*tdz), 0.1);
+            p.vx += tdx * pullForce;
+            p.vy += tdy * pullForce;
+            p.vz += tdz * pullForce;
+            p.vx *= 0.83;
+            p.vy *= 0.83;
+            p.vz *= 0.83;
+
+            // Skin/face color tint
+            const faceColor = new THREE.Color();
+            faceColor.setHSL(0.08 + Math.sin(time * 0.001 + i * 0.005) * 0.05, 0.7, 0.55);
+            p.mesh.material.color.lerp(faceColor, 0.05);
+        }
+        else if (handDetected) {
+            // Pinky gesture: ghost hand mode
+            if (isPinky) {
+                // Ghost hand uses all detected hands (mode is toggled on)
+                const pinkyHands = [];
+                if (hands[0].detected) pinkyHands.push(hands[0]);
+                if (hands[1].detected) pinkyHands.push(hands[1]);
+
+                let myHand, myIdx, myTotal;
+                if (pinkyHands.length === 2) {
+                    const half = Math.floor(particles.length / 2);
+                    if (i < half) { myHand = pinkyHands[0]; myIdx = i; myTotal = half; }
+                    else { myHand = pinkyHands[1]; myIdx = i - half; myTotal = particles.length - half; }
+                } else {
+                    myHand = pinkyHands[0];
+                    myIdx = i;
+                    myTotal = particles.length;
+                }
+
+                const targets = getGhostHandTargets(myHand, myTotal);
+                if (targets.length > 0) {
+                    const ti = myIdx % targets.length;
+                    const target = targets[ti];
+                    const tdx = target.x - p.mesh.position.x;
+                    const tdy = target.y - p.mesh.position.y;
+                    const tdz = target.z - p.mesh.position.z;
+                    const tdist = Math.sqrt(tdx * tdx + tdy * tdy + tdz * tdz);
+                    const pullForce = 0.02 + 0.05 / Math.max(tdist, 0.1);
+                    p.vx += tdx * pullForce;
+                    p.vy += tdy * pullForce;
+                    p.vz += tdz * pullForce;
+                    p.vx *= 0.82;
+                    p.vy *= 0.82;
+                    p.vz *= 0.82;
+
+                    // Eerie green/cyan color
+                    const ghostColor = new THREE.Color();
+                    ghostColor.setHSL(0.45 + Math.sin(time * 0.002 + i * 0.01) * 0.08, 0.9, 0.5);
+                    p.mesh.material.color.lerp(ghostColor, 0.08);
+                }
+            }
+            // Rock gesture (any hand)
+            else if (isRock && (rockPhase === 'forming' || rockPhase === 'vibrating')) {
+                const circleAngle = (i / particles.length) * Math.PI * 2;
+                const now = performance.now() / 1000;
+                const elapsed = now - rockStartTime;
+
+                let tx = rockCenter.x + Math.cos(circleAngle) * rockCircleRadius;
+                let ty = rockCenter.y + Math.sin(circleAngle) * rockCircleRadius;
+                let tz = rockCenter.z;
+
+                if (elapsed > 2.0) {
+                    const intensity = (elapsed - 2.0) / 2.5;
+                    const vibAmp = 0.02 + intensity * 0.15;
+                    const vibFreq = 20 + intensity * 60;
+                    tx += Math.sin(now * vibFreq + i * 0.7) * vibAmp;
+                    ty += Math.cos(now * vibFreq * 1.3 + i * 1.1) * vibAmp;
+                    tz += Math.sin(now * vibFreq * 0.9 + i * 0.5) * vibAmp * 0.5;
+                }
+
+                const tdx = tx - p.mesh.position.x;
+                const tdy = ty - p.mesh.position.y;
+                const tdz = tz - p.mesh.position.z;
+                const pullForce = 0.02 + 0.04 / Math.max(Math.sqrt(tdx*tdx+tdy*tdy+tdz*tdz), 0.1);
+                p.vx += tdx * pullForce;
+                p.vy += tdy * pullForce;
+                p.vz += tdz * pullForce;
+                p.vx *= 0.85;
+                p.vy *= 0.85;
+                p.vz *= 0.85;
+
+                if (elapsed > 2.0) {
+                    const intensity = (elapsed - 2.0) / 2.5;
+                    const fireColor = new THREE.Color();
+                    fireColor.setHSL(0.05 - intensity * 0.03, 1, 0.5 + intensity * 0.2);
+                    p.mesh.material.color.lerp(fireColor, 0.1);
+                }
+            } else if (isFist) {
+                // Count fist hands and determine which sphere this particle belongs to
+                const fistHands = [];
+                if (hands[0].detected && hands[0].isFist) fistHands.push(hands[0]);
+                if (hands[1].detected && hands[1].isFist) fistHands.push(hands[1]);
+
+                // Assign particle to a sphere
+                let myFistHand;
+                let myParticleIndex;
+                let myTotal;
+
+                if (fistHands.length === 2) {
+                    // Two fists: split particles in half
+                    const half = Math.floor(particles.length / 2);
+                    if (i < half) {
+                        myFistHand = fistHands[0];
+                        myParticleIndex = i;
+                        myTotal = half;
+                    } else {
+                        myFistHand = fistHands[1];
+                        myParticleIndex = i - half;
+                        myTotal = particles.length - half;
+                    }
+                } else {
+                    // One fist: all particles go to it
+                    myFistHand = fistHands[0];
+                    myParticleIndex = i;
+                    myTotal = particles.length;
+                }
+
+                const fhx = myFistHand.pos.x;
+                const fhy = myFistHand.pos.y;
+                const fhz = myFistHand.pos.z;
+
+                const targetR = 1.8;
+                const golden = 2.399963;
+                const theta = golden * myParticleIndex;
+                const phi = Math.acos(1 - 2 * (myParticleIndex + 0.5) / myTotal);
+                const tx = fhx + Math.sin(phi) * Math.cos(theta) * targetR;
+                const ty = fhy + Math.sin(phi) * Math.sin(theta) * targetR;
+                const tz = fhz + Math.cos(phi) * targetR;
+
+                const tdx = tx - p.mesh.position.x;
+                const tdy = ty - p.mesh.position.y;
+                const tdz = tz - p.mesh.position.z;
+                const tdist = Math.sqrt(tdx * tdx + tdy * tdy + tdz * tdz);
+
+                const pullForce = 0.015 + 0.03 / Math.max(tdist, 0.1);
+                p.vx += tdx * pullForce;
+                p.vy += tdy * pullForce;
+                p.vz += tdz * pullForce;
+
+                if (tdist < 0.3) {
+                    p.vx += tdy * 0.002;
+                    p.vy -= tdx * 0.002;
+                }
+
+                p.vx *= 0.88;
+                p.vy *= 0.88;
+                p.vz *= 0.88;
+            } else {
+                // Normal mode: attract to each detected hand
+                for (let hi = 0; hi < 2; hi++) {
+                    const h = hands[hi];
+                    if (!h.detected) continue;
+
+                    const dx = h.pos.x - p.mesh.position.x;
+                    const dy = h.pos.y - p.mesh.position.y;
+                    const dz = h.pos.z - p.mesh.position.z;
+                    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+                    // Split particles between hands when both present
+                    const bothHands = hands[0].detected && hands[1].detected;
+                    const isMyHand = !bothHands || (i % 2 === hi);
+                    const forceMult = isMyHand ? 1 : 0.3;
+
+                    if (dist < 2.5) {
+                        const force = 0.002 * forceMult / Math.max(dist, 0.3);
+                        p.vx += dx * force;
+                        p.vy += dy * force;
+                        p.vz += dz * force * 0.5;
+                    } else {
+                        p.vx += dx * 0.0001 * forceMult;
+                        p.vy += dy * 0.0001 * forceMult;
+                    }
+
+                    // Fingertip attraction
+                    if (h.fingers.length > 0) {
+                        const fi = i % h.fingers.length;
+                        const fp = h.fingers[fi];
+                        const fdx = fp.x - p.mesh.position.x;
+                        const fdy = fp.y - p.mesh.position.y;
+                        const fdist = Math.sqrt(fdx * fdx + fdy * fdy);
+                        if (fdist < 1.2) {
+                            const ff = 0.001 * forceMult / Math.max(fdist, 0.2);
+                            p.vx += fdx * ff;
+                            p.vy += fdy * ff;
+                        }
+                    }
+                }
+            }
+        } else {
+            // FREE MOVEMENT - wander around the space
+            p.wanderAngle += (Math.random() - 0.5) * 0.1;
+            p.vx += Math.cos(p.wanderAngle) * 0.0003;
+            p.vy += Math.sin(p.wanderAngle) * 0.0003;
+            p.vz += (Math.random() - 0.5) * 0.0003;
+
+            // Flowing currents
+            const flow = Math.sin(time * 0.0003 + p.mesh.position.y * 0.5) * 0.0004;
+            p.vx += flow;
+            p.vy += Math.cos(time * 0.0004 + p.mesh.position.x * 0.3) * 0.0002;
+            p.vz += Math.sin(time * 0.0005 + p.mesh.position.z * 0.4) * 0.0001;
+        }
+
+        // Damping (fist/rock/pinky/face have their own damping above)
+        const isForming = isRock && (rockPhase === 'forming' || rockPhase === 'vibrating');
+        const hasFace = faceMode && faceTargets.length > 0;
+        if (!(isFist && handDetected) && !isForming && !isPinky && !hasFace) {
+            const dampVal = rockPhase === 'exploded' ? 0.995 : 0.985;
+            p.vx *= dampVal;
+            p.vy *= dampVal;
+            p.vz *= dampVal;
+        }
+
+        // Speed limit
+        const spd = Math.sqrt(p.vx * p.vx + p.vy * p.vy + p.vz * p.vz);
+        const maxSpd = rockPhase === 'exploded' ? 0.3 : (isFist ? 0.12 : (handDetected ? 0.08 : 0.03));
+        if (spd > maxSpd) {
+            const ratio = maxSpd / spd;
+            p.vx *= ratio;
+            p.vy *= ratio;
+            p.vz *= ratio;
+        }
+
+        // Move
+        p.mesh.position.x += p.vx;
+        p.mesh.position.y += p.vy;
+        p.mesh.position.z += p.vz;
+
+        // Wrap around bounds (not during sphere, rock, pinky, or face)
+        if ((!isFist || !handDetected) && !isPinky && !hasFace && rockPhase !== 'exploded' && rockPhase !== 'forming' && rockPhase !== 'vibrating') {
+            if (p.mesh.position.x > BOUNDS.x) p.mesh.position.x = -BOUNDS.x;
+            if (p.mesh.position.x < -BOUNDS.x) p.mesh.position.x = BOUNDS.x;
+            if (p.mesh.position.y > BOUNDS.y) p.mesh.position.y = -BOUNDS.y;
+            if (p.mesh.position.y < -BOUNDS.y) p.mesh.position.y = BOUNDS.y;
+            if (p.mesh.position.z > BOUNDS.z) p.mesh.position.z = -BOUNDS.z;
+            if (p.mesh.position.z < -BOUNDS.z) p.mesh.position.z = BOUNDS.z;
+        }
+
+        // Rotate
+        p.mesh.rotation.x += p.spin;
+        p.mesh.rotation.y += p.spin * 0.7;
+        p.mesh.rotation.z += p.spin * 0.3;
+
+        // Record fire trail during explosion
+        if (p.hasFireTrail && rockPhase === 'exploded') {
+            const now = performance.now() / 1000;
+            const elapsed = now - p.fireTrailStart;
+            if (elapsed < 2.0 && p.fireTrailPoints.length > 0) {
+                const last = p.fireTrailPoints[p.fireTrailPoints.length - 1];
+                const dd = (p.mesh.position.x - last.x) ** 2 + (p.mesh.position.y - last.y) ** 2 + (p.mesh.position.z - last.z) ** 2;
+                if (dd > 0.0005) {
+                    p.fireTrailPoints.push({
+                        x: p.mesh.position.x,
+                        y: p.mesh.position.y,
+                        z: p.mesh.position.z
+                    });
+                    if (p.fireTrailPoints.length > MAX_TRAIL_POINTS) p.fireTrailPoints.shift();
+                }
+            }
+        }
+
+        // Color
+        const newColor = colorModes[currentMode](t + time * 0.0001);
+        p.mesh.material.color.lerp(newColor, 0.02);
+
+        // Opacity based on distance to camera/hand
+        let opacity = 0.6 + Math.sin(time * 0.002 + i) * 0.2;
+        if (handDetected) {
+            const hd = Math.sqrt(
+                (handPos.x - p.mesh.position.x) ** 2 +
+                (handPos.y - p.mesh.position.y) ** 2
+            );
+            if (hd < 1.5) opacity = 0.8 + (1.5 - hd) * 0.13;
+        }
+        p.mesh.material.opacity = Math.min(1, Math.max(0.2, opacity));
+    }
+
+    // Burst particles (temporary)
+    for (let i = burstParticles.length - 1; i >= 0; i--) {
+        const p = burstParticles[i];
+        p.life -= dt;
+        if (p.life <= 0) {
+            scene.remove(p.mesh);
+            p.mesh.geometry.dispose();
+            p.mesh.material.dispose();
+            burstParticles.splice(i, 1);
+            continue;
+        }
+        p.mesh.position.x += p.vx;
+        p.mesh.position.y += p.vy;
+        p.mesh.position.z += p.vz;
+        p.vx *= 0.97; p.vy *= 0.97; p.vz *= 0.97;
+        p.mesh.rotation.x += 0.05;
+        p.mesh.rotation.z += 0.03;
+        const lr = p.life / p.maxLife;
+        p.mesh.material.opacity = lr;
+        p.mesh.scale.setScalar(0.5 + lr * 0.5);
+    }
+
+    document.getElementById('particleCount').textContent = PARTICLE_COUNT;
+}
+
+function spawnBurst(x, y, z, count) {
+    for (let i = 0; i < count; i++) {
+        const color = colorModes[currentMode](i / count);
+        const length = 0.05 + Math.random() * 0.15;
+        const mesh = createLineMesh(color, length);
+        mesh.position.set(x, y, z);
+        scene.add(mesh);
+
+        const angle = Math.random() * Math.PI * 2;
+        const phi = Math.random() * Math.PI;
+        const speed = 0.03 + Math.random() * 0.08;
+
+        burstParticles.push({
+            mesh,
+            vx: Math.sin(phi) * Math.cos(angle) * speed,
+            vy: Math.sin(phi) * Math.sin(angle) * speed,
+            vz: Math.cos(phi) * speed,
+            life: 1.5 + Math.random(),
+            maxLife: 1.5 + Math.random()
+        });
+    }
+}
+
+// --- TRAIL (one per hand) ---
+let trailLines = [];
+function initTrail() {
+    for (let hi = 0; hi < 2; hi++) {
+        const trailGeo = new THREE.BufferGeometry();
+        const positions = new Float32Array(TRAIL_LENGTH * 3);
+        const colors = new Float32Array(TRAIL_LENGTH * 3);
+        trailGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        trailGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        const trailMat = new THREE.LineBasicMaterial({
+            vertexColors: true, transparent: true, opacity: 0.6
+        });
+        const line = new THREE.Line(trailGeo, trailMat);
+        scene.add(line);
+        trailLines.push(line);
+    }
+}
+
+function updateTrail() {
+    for (let hi = 0; hi < 2; hi++) {
+        const h = hands[hi];
+        const line = trailLines[hi];
+        if (!h.detected) {
+            line.geometry.setDrawRange(0, 0);
+            continue;
+        }
+        trailPoints[hi].push({ x: h.pos.x, y: h.pos.y, z: h.pos.z });
+        if (trailPoints[hi].length > TRAIL_LENGTH) trailPoints[hi].shift();
+
+        const pos = line.geometry.attributes.position;
+        const col = line.geometry.attributes.color;
+        for (let i = 0; i < TRAIL_LENGTH; i++) {
+            const idx = i < trailPoints[hi].length ? i : trailPoints[hi].length - 1;
+            const p = trailPoints[hi][idx] || { x: 0, y: 0, z: 0 };
+            pos.setXYZ(i, p.x, p.y, p.z);
+            const t = i / TRAIL_LENGTH;
+            const c = colorModes[currentMode](t + hi * 0.5);
+            col.setXYZ(i, c.r * t, c.g * t, c.b * t);
+        }
+        pos.needsUpdate = true;
+        col.needsUpdate = true;
+        line.geometry.setDrawRange(0, trailPoints[hi].length);
+    }
+}
+
+// --- GLOW (one per hand) ---
+let glowMeshes = [], glowMeshOuters = [];
+function initGlow() {
+    for (let hi = 0; hi < 2; hi++) {
+        const glowMat = new THREE.MeshStandardMaterial({
+            color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 3,
+            metalness: 1, roughness: 0, transparent: true, opacity: 0.4
+        });
+        const gm = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16), glowMat);
+        gm.visible = false;
+        scene.add(gm);
+        glowMeshes.push(gm);
+
+        const outerMat = new THREE.MeshStandardMaterial({
+            color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 1,
+            transparent: true, opacity: 0.08, side: THREE.BackSide
+        });
+        const go = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 16), outerMat);
+        go.visible = false;
+        scene.add(go);
+        glowMeshOuters.push(go);
+    }
+}
+
+function updateGlow() {
+    for (let hi = 0; hi < 2; hi++) {
+        const h = hands[hi];
+        const gm = glowMeshes[hi];
+        const go = glowMeshOuters[hi];
+        if (!h.detected) {
+            gm.visible = false;
+            go.visible = false;
+            continue;
+        }
+        gm.visible = true;
+        go.visible = true;
+        gm.position.set(h.pos.x, h.pos.y, h.pos.z + 0.1);
+        go.position.copy(gm.position);
+        const pulse = 0.8 + Math.sin(performance.now() * 0.005 + hi * 2) * 0.3;
+        const sizeBoost = 1 + h.velocity * 3;
+        gm.scale.setScalar(pulse * sizeBoost);
+        go.scale.setScalar(pulse * sizeBoost * 2.5);
+        const c = colorModes[currentMode](performance.now() * 0.001 + hi * 0.5);
+        gm.material.color.copy(c);
+        gm.material.emissive.copy(c);
+        gm.material.opacity = 0.3 + h.velocity * 0.5;
+        go.material.emissive.copy(c);
+        go.material.opacity = 0.05 + h.velocity * 0.15;
+    }
+}
+
+// --- LIGHTS ---
+let handLight2;
+function initHandLight2() {
+    handLight2 = new THREE.PointLight(0xffffff, 0, 6);
+    handLight2.position.set(0, 0, 2);
+    scene.add(handLight2);
+}
+
+function updateLights(time) {
+    pointLight1.position.x = Math.sin(time * 0.0008) * 3;
+    pointLight1.position.y = Math.cos(time * 0.0006) * 2;
+    pointLight1.position.z = 2 + Math.sin(time * 0.001);
+    pointLight2.position.x = Math.cos(time * 0.0007) * 3;
+    pointLight2.position.y = Math.sin(time * 0.0009) * 2;
+    pointLight2.position.z = 2 + Math.cos(time * 0.0008);
+    const c1 = colorModes[currentMode](time * 0.0005);
+    const c2 = colorModes[currentMode](time * 0.0005 + 0.5);
+    pointLight1.color.copy(c1);
+    pointLight2.color.copy(c2);
+
+    // Hand lights follow each hand
+    const handLights = [handLight, handLight2];
+    for (let hi = 0; hi < 2; hi++) {
+        const h = hands[hi];
+        const hl = handLights[hi];
+        if (!hl) continue;
+        if (h.detected) {
+            hl.position.set(h.pos.x, h.pos.y, h.pos.z + 1);
+            hl.intensity = 2 + h.velocity * 5;
+            hl.color.copy(colorModes[currentMode](time * 0.001 + hi * 0.5));
+        } else {
+            hl.intensity *= 0.95;
+        }
+    }
+}
+
+// --- FIST SPHERES (one per hand) ---
+let fistSpheres = [null, null];
+let fistSphereProgress = [0, 0];
+
+function createFistSphereGroup() {
+    const group = new THREE.Group();
+    const radii = [1.8, 1.84, 1.76];
+    const segs = [
+        { w: 24, h: 18 }, { w: 18, h: 24 }, { w: 14, h: 14 }
+    ];
+    for (let r = 0; r < radii.length; r++) {
+        const geo = new THREE.SphereGeometry(radii[r], segs[r].w, segs[r].h);
+        const edges = new THREE.EdgesGeometry(geo);
+        const mat = new THREE.LineBasicMaterial({
+            color: 0xffffff, transparent: true, opacity: 0
+        });
+        const wire = new THREE.LineSegments(edges, mat);
+        wire.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+        group.add(wire);
+    }
+    for (let i = 0; i < 4; i++) {
+        const curve = new THREE.EllipseCurve(0, 0, 1.8, 1.8, 0, Math.PI * 2, false, 0);
+        const pts = curve.getPoints(50);
+        const geo = new THREE.BufferGeometry().setFromPoints(pts.map(p => new THREE.Vector3(p.x, p.y, 0)));
+        const mat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 });
+        const ring = new THREE.Line(geo, mat);
+        ring.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
+        group.add(ring);
+    }
+    group.visible = false;
+    scene.add(group);
+    return group;
+}
+
+function initFistSphere() {
+    fistSpheres[0] = createFistSphereGroup();
+    fistSpheres[1] = createFistSphereGroup();
+}
+
+function updateFistSphere(time) {
+    for (let hi = 0; hi < 2; hi++) {
+        const sphere = fistSpheres[hi];
+        if (!sphere) continue;
+
+        const h = hands[hi];
+        const target = (h.detected && h.isFist) ? 1 : 0;
+        const speed = target === 1 ? 0.08 : 0.05;
+        fistSphereProgress[hi] += (target - fistSphereProgress[hi]) * speed;
+
+        if (fistSphereProgress[hi] < 0.01) {
+            sphere.visible = false;
+            continue;
+        }
+        sphere.visible = true;
+        sphere.position.set(h.pos.x, h.pos.y, h.pos.z);
+        sphere.scale.setScalar(fistSphereProgress[hi]);
+        sphere.rotation.y += 0.015 * (hi === 0 ? 1 : -1);
+        sphere.rotation.x += 0.008;
+
+        sphere.children.forEach((child, ci) => {
+            child.rotation.z += 0.003 * (ci % 2 === 0 ? 1 : -1);
+            child.rotation.x += 0.002 * (ci % 2 === 0 ? -1 : 1);
+            const c = colorModes[currentMode](time * 0.001 + ci * 0.3 + hi * 0.5);
+            child.material.color.copy(c);
+            child.material.opacity = fistSphereProgress[hi] * (0.4 + Math.sin(time * 0.003 + ci + hi * 2) * 0.15);
+        });
+    }
+}
+
+function detectFist(landmarks) {
+    const tipIds = [8, 12, 16, 20];
+    const mcpIds = [5, 9, 13, 17];
+    let closed = 0;
+    for (let i = 0; i < 4; i++) {
+        if (landmarks[tipIds[i]].y > landmarks[mcpIds[i]].y - 0.02) closed++;
+    }
+    const thumbDist = Math.sqrt(
+        (landmarks[4].x - landmarks[2].x) ** 2 +
+        (landmarks[4].y - landmarks[2].y) ** 2
+    );
+    if (thumbDist < 0.08) closed++;
+    return closed >= 4;
+}
+
+// --- ROCK GESTURE (thumb + index + pinky up) ---
+let rockStartTime = 0;
+let rockPhase = 'none'; // 'none' | 'forming' | 'vibrating' | 'exploded'
+let rockCircleRadius = 1.5;
+let rockCenter = { x: 0, y: 0, z: 0 };
+let fireTrails = []; // { points: [{x,y,z}], life, maxLife }
+const FIRE_TRAIL_DURATION = 5.0;
+const MAX_TRAIL_POINTS = 30;
+
+function isFingerUp(landmarks, tipId, mcpId) {
+    return landmarks[tipId].y < landmarks[mcpId].y - 0.02;
+}
+
+function isFingerDown(landmarks, tipId, mcpId) {
+    return landmarks[tipId].y > landmarks[mcpId].y - 0.02;
+}
+
+function detectRock(landmarks) {
+    // Thumb up: tip (4) is far from base (2)
+    const thumbDist = Math.sqrt(
+        (landmarks[4].x - landmarks[2].x) ** 2 +
+        (landmarks[4].y - landmarks[2].y) ** 2
+    );
+    const thumbUp = thumbDist > 0.06;
+
+    // Index up (tip 8 above mcp 5)
+    const indexUp = isFingerUp(landmarks, 8, 5);
+
+    // Middle down (tip 12 below mcp 9)
+    const middleDown = isFingerDown(landmarks, 12, 9);
+
+    // Ring down (tip 16 below mcp 13)
+    const ringDown = isFingerDown(landmarks, 16, 13);
+
+    // Pinky down (tip 20 below mcp 17)
+    const pinkyDown = isFingerDown(landmarks, 20, 17);
+
+    return thumbUp && indexUp && middleDown && ringDown && pinkyDown;
+}
+
+function createFireTrailLine() {
+    const geo = new THREE.BufferGeometry();
+    const positions = new Float32Array(MAX_TRAIL_POINTS * 3);
+    const colors = new Float32Array(MAX_TRAIL_POINTS * 3);
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geo.setDrawRange(0, 0);
+    const mat = new THREE.LineBasicMaterial({
+        vertexColors: true, transparent: true, opacity: 1
+    });
+    const line = new THREE.Line(geo, mat);
+    scene.add(line);
+    return line;
+}
+
+function initFireTrails() {
+    // Pre-create trail lines for each particle
+    for (let i = 0; i < particles.length; i++) {
+        if (!particles[i].fireTrailLine) {
+            particles[i].fireTrailLine = null;
+            particles[i].fireTrailPoints = [];
+        }
+    }
+}
+
+function updateRockGesture(time, dt) {
+    const now = performance.now() / 1000;
+
+    if (isRock && handDetected && rockPhase !== 'exploded') {
+        if (rockPhase === 'none') {
+            rockPhase = 'forming';
+            rockStartTime = now;
+            rockCenter = { ...handPos };
+            // Clean old fire trails
+            cleanupFireTrails();
+        }
+
+        rockCenter.x += (handPos.x - rockCenter.x) * 0.1;
+        rockCenter.y += (handPos.y - rockCenter.y) * 0.1;
+        rockCenter.z += (handPos.z - rockCenter.z) * 0.1;
+
+        const elapsed = now - rockStartTime;
+
+        if (elapsed < 2.0) {
+            // PHASE 1: Form circle (0-2s)
+            rockPhase = 'forming';
+            document.getElementById('statusText').textContent = 'Formando circulo...';
+            document.getElementById('statusText').style.borderColor = 'rgba(255,165,0,0.7)';
+        } else if (elapsed < 4.5) {
+            // PHASE 2: Vibrate (2-4.5s)
+            rockPhase = 'vibrating';
+            const intensity = (elapsed - 2.0) / 2.5; // 0 to 1
+            document.getElementById('statusText').textContent = 'Cargando energia... ' + Math.floor(intensity * 100) + '%';
+            document.getElementById('statusText').style.borderColor = `rgba(255,${Math.floor(100 - intensity * 100)},0,0.9)`;
+        } else {
+            // PHASE 3: EXPLODE! (4.5s+)
+            rockPhase = 'exploded';
+            document.getElementById('statusText').textContent = 'EXPLOSION!';
+            document.getElementById('statusText').style.borderColor = 'rgba(255,0,0,1)';
+            triggerRockExplosion();
+        }
+    }
+
+    if (!isRock && rockPhase === 'forming' || !isRock && rockPhase === 'vibrating') {
+        // Cancelled gesture
+        rockPhase = 'none';
+    }
+
+    // Update fire trails fade (after explosion)
+    if (rockPhase === 'exploded') {
+        const explosionElapsed = now - (rockStartTime + 4.5);
+        if (explosionElapsed > FIRE_TRAIL_DURATION + 1) {
+            rockPhase = 'none';
+            cleanupFireTrails();
+        }
+    }
+
+    updateFireTrailRendering(now);
+}
+
+function triggerRockExplosion() {
+    const cx = rockCenter.x;
+    const cy = rockCenter.y;
+    const cz = rockCenter.z;
+
+    for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+        // Direction from center outward
+        const dx = p.mesh.position.x - cx;
+        const dy = p.mesh.position.y - cy;
+        const dz = p.mesh.position.z - cz;
+        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz) || 0.1;
+        const speed = 0.15 + Math.random() * 0.2;
+        p.vx = (dx / dist) * speed;
+        p.vy = (dy / dist) * speed;
+        p.vz = (dz / dist) * speed;
+
+        // Create fire trail for this particle
+        if (p.fireTrailLine) {
+            scene.remove(p.fireTrailLine);
+            p.fireTrailLine.geometry.dispose();
+            p.fireTrailLine.material.dispose();
+        }
+        p.fireTrailLine = createFireTrailLine();
+        p.fireTrailPoints = [{ x: p.mesh.position.x, y: p.mesh.position.y, z: p.mesh.position.z }];
+        p.fireTrailStart = performance.now() / 1000;
+        p.hasFireTrail = true;
+    }
+}
+
+function cleanupFireTrails() {
+    for (const p of particles) {
+        if (p.fireTrailLine) {
+            scene.remove(p.fireTrailLine);
+            p.fireTrailLine.geometry.dispose();
+            p.fireTrailLine.material.dispose();
+            p.fireTrailLine = null;
+        }
+        p.fireTrailPoints = [];
+        p.hasFireTrail = false;
+    }
+}
+
+function updateFireTrailRendering(now) {
+    for (const p of particles) {
+        if (!p.hasFireTrail || !p.fireTrailLine) continue;
+
+        const elapsed = now - p.fireTrailStart;
+
+        // Record position while particles are flying (first 2 seconds)
+        if (elapsed < 2.0) {
+            const last = p.fireTrailPoints[p.fireTrailPoints.length - 1];
+            const dx = p.mesh.position.x - last.x;
+            const dy = p.mesh.position.y - last.y;
+            const dz = p.mesh.position.z - last.z;
+            if (dx * dx + dy * dy + dz * dz > 0.001) {
+                p.fireTrailPoints.push({
+                    x: p.mesh.position.x,
+                    y: p.mesh.position.y,
+                    z: p.mesh.position.z
+                });
+                if (p.fireTrailPoints.length > MAX_TRAIL_POINTS) {
+                    p.fireTrailPoints.shift();
+                }
+            }
+        }
+
+        // Fade out trail over FIRE_TRAIL_DURATION
+        const fadeProgress = Math.max(0, (elapsed - 0.5) / FIRE_TRAIL_DURATION);
+        const trailOpacity = Math.max(0, 1 - fadeProgress);
+
+        if (trailOpacity <= 0) {
+            scene.remove(p.fireTrailLine);
+            p.fireTrailLine.geometry.dispose();
+            p.fireTrailLine.material.dispose();
+            p.fireTrailLine = null;
+            p.hasFireTrail = false;
+            continue;
+        }
+
+        // Update trail geometry
+        const pts = p.fireTrailPoints;
+        const pos = p.fireTrailLine.geometry.attributes.position;
+        const col = p.fireTrailLine.geometry.attributes.color;
+
+        for (let j = 0; j < MAX_TRAIL_POINTS; j++) {
+            if (j < pts.length) {
+                pos.setXYZ(j, pts[j].x, pts[j].y, pts[j].z);
+                // Fire colors: tip = white/yellow, tail = red/dark
+                const t = j / pts.length;
+                const r = 1;
+                const g = 0.2 + t * 0.6;
+                const b = t * 0.15;
+                col.setXYZ(j, r * trailOpacity, g * trailOpacity, b * trailOpacity);
+            }
+        }
+
+        pos.needsUpdate = true;
+        col.needsUpdate = true;
+        p.fireTrailLine.geometry.setDrawRange(0, pts.length);
+        p.fireTrailLine.material.opacity = trailOpacity;
+    }
+}
+
+// --- PINKY MODE: GHOST HAND (elongated fingers) ---
+
+function getGhostHandTargets(h, count) {
+    // MediaPipe hand landmarks:
+    // 0: wrist
+    // 1-4: thumb (CMC, MCP, IP, TIP)
+    // 5-8: index (MCP, PIP, DIP, TIP)
+    // 9-12: middle (MCP, PIP, DIP, TIP)
+    // 13-16: ring (MCP, PIP, DIP, TIP)
+    // 17-20: pinky (MCP, PIP, DIP, TIP)
+    const lm = h.landmarks3D;
+    if (lm.length < 21) return [];
+
+    // Define hand skeleton segments
+    // Each finger: base -> joints -> tip, then extend tip further
+    const fingers = [
+        [0, 1, 2, 3, 4],       // thumb
+        [0, 5, 6, 7, 8],       // index
+        [0, 9, 10, 11, 12],    // middle
+        [0, 13, 14, 15, 16],   // ring
+        [0, 17, 18, 19, 20]    // pinky
+    ];
+
+    // Palm connections
+    const palmEdges = [
+        [0, 1], [0, 5], [0, 9], [0, 13], [0, 17],
+        [5, 9], [9, 13], [13, 17], [1, 5]
+    ];
+
+    const targets = [];
+
+    // Generate points along palm edges
+    const palmPointCount = Math.floor(count * 0.25);
+    const pointsPerPalmEdge = Math.floor(palmPointCount / palmEdges.length);
+    for (const [a, b] of palmEdges) {
+        for (let j = 0; j < pointsPerPalmEdge; j++) {
+            const t = j / pointsPerPalmEdge;
+            targets.push({
+                x: lm[a].x + (lm[b].x - lm[a].x) * t + (Math.random() - 0.5) * 0.05,
+                y: lm[a].y + (lm[b].y - lm[a].y) * t + (Math.random() - 0.5) * 0.05,
+                z: lm[a].z + (lm[b].z - lm[a].z) * t + (Math.random() - 0.5) * 0.05
+            });
+        }
+    }
+
+    // Generate points along fingers with elongation
+    const fingerPointCount = count - targets.length;
+    const pointsPerFinger = Math.floor(fingerPointCount / 5);
+
+    for (const finger of fingers) {
+        // Get finger joints
+        const joints = finger.map(idx => lm[idx]);
+
+        // Calculate finger direction (from MCP to TIP) for elongation
+        const mcp = joints[1]; // base knuckle
+        const tip = joints[joints.length - 1];
+        const dirX = tip.x - mcp.x;
+        const dirY = tip.y - mcp.y;
+        const dirZ = tip.z - mcp.z;
+
+        // Extended tip = tip + direction * 1.0 (double the finger length)
+        const extTip = {
+            x: tip.x + dirX * 1.0,
+            y: tip.y + dirY * 1.0,
+            z: tip.z + dirZ * 1.0
+        };
+
+        // Build full path: joints + extended segment
+        const fullPath = [...joints, extTip];
+
+        for (let j = 0; j < pointsPerFinger; j++) {
+            // Distribute along the full path
+            const t = j / pointsPerFinger;
+            const segCount = fullPath.length - 1;
+            const segFloat = t * segCount;
+            const segIdx = Math.min(Math.floor(segFloat), segCount - 1);
+            const segT = segFloat - segIdx;
+
+            const a = fullPath[segIdx];
+            const b = fullPath[segIdx + 1];
+
+            // Thicker near palm, thinner at extended tips
+            const thickness = 0.06 * (1 - t * 0.7);
+
+            targets.push({
+                x: a.x + (b.x - a.x) * segT + (Math.random() - 0.5) * thickness,
+                y: a.y + (b.y - a.y) * segT + (Math.random() - 0.5) * thickness,
+                z: a.z + (b.z - a.z) * segT + (Math.random() - 0.5) * thickness * 0.5
+            });
+        }
+    }
+
+    // Fill remaining with random palm fill
+    while (targets.length < count) {
+        const a = palmEdges[Math.floor(Math.random() * palmEdges.length)];
+        const t = Math.random();
+        targets.push({
+            x: lm[a[0]].x + (lm[a[1]].x - lm[a[0]].x) * t + (Math.random() - 0.5) * 0.08,
+            y: lm[a[0]].y + (lm[a[1]].y - lm[a[0]].y) * t + (Math.random() - 0.5) * 0.08,
+            z: lm[a[0]].z + (lm[a[1]].z - lm[a[0]].z) * t + (Math.random() - 0.5) * 0.04
+        });
+    }
+
+    return targets;
+}
+
+// --- FACE DETECTION ---
+
+// Key face mesh edge connections for a recognizable face wireframe
+const FACE_EDGES = [
+    // Face oval
+    [10,338],[338,297],[297,332],[332,284],[284,251],[251,389],[389,356],[356,454],[454,323],[323,361],[361,288],
+    [288,397],[397,365],[365,379],[379,378],[378,400],[400,377],[377,152],[152,148],[148,176],[176,149],[149,150],
+    [150,136],[136,172],[172,58],[58,132],[132,93],[93,234],[234,127],[127,162],[162,21],[21,54],[54,103],[103,67],[67,109],[109,10],
+    // Left eyebrow
+    [70,63],[63,105],[105,66],[66,107],[107,55],[55,65],[65,52],[52,53],[53,46],
+    // Right eyebrow
+    [300,293],[293,334],[334,296],[296,336],[336,285],[285,295],[295,282],[282,283],[283,276],
+    // Left eye
+    [33,7],[7,163],[163,144],[144,145],[145,153],[153,154],[154,155],[155,133],[133,173],[173,157],[157,158],[158,159],[159,160],[160,161],[161,246],[246,33],
+    // Right eye
+    [263,249],[249,390],[390,373],[373,374],[374,380],[380,381],[381,382],[382,362],[362,398],[398,384],[384,385],[385,386],[386,387],[387,388],[388,466],[466,263],
+    // Nose
+    [168,6],[6,197],[197,195],[195,5],[5,4],[4,1],[1,19],[19,94],[94,2],[2,164],
+    [98,97],[97,2],[2,326],[326,327],
+    // Outer lips
+    [61,146],[146,91],[91,181],[181,84],[84,17],[17,314],[314,405],[405,321],[321,375],[375,291],[291,409],[409,270],[270,269],[269,267],[267,0],[0,37],[37,39],[39,40],[40,185],[185,61],
+    // Inner lips
+    [78,95],[95,88],[88,178],[178,87],[87,14],[14,317],[317,402],[402,318],[318,324],[324,308],[308,415],[415,310],[310,311],[311,312],[312,13],[13,82],[82,81],[81,80],[80,191],[191,78],
+    // Nose bridge sides
+    [129,49],[49,131],[131,134],[245,193],[193,55],
+    [358,279],[279,360],[360,363],[465,417],[417,285]
+];
+
+async function initFaceTracking() {
+    const { FaceLandmarker, FilesetResolver } = await import(
+        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8'
+    );
+    const vision = await FilesetResolver.forVisionTasks(
+        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/wasm'
+    );
+    faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+        baseOptions: {
+            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+            delegate: 'GPU'
+        },
+        runningMode: 'VIDEO',
+        numFaces: 1,
+        minFaceDetectionConfidence: 0.5,
+        minFacePresenceConfidence: 0.5,
+        minTrackingConfidence: 0.5
+    });
+}
+
+function getHandShapeTargets(h, count) {
+    const lm = h.landmarks3D;
+    if (lm.length < 21) return [];
+
+    const edges = [
+        [0,1],[1,2],[2,3],[3,4],
+        [0,5],[5,6],[6,7],[7,8],
+        [0,9],[9,10],[10,11],[11,12],
+        [0,13],[13,14],[14,15],[15,16],
+        [0,17],[17,18],[18,19],[19,20],
+        [5,9],[9,13],[13,17],[1,5]
+    ];
+
+    const targets = [];
+    const perEdge = Math.max(2, Math.floor(count / edges.length));
+
+    for (const [a, b] of edges) {
+        for (let j = 0; j < perEdge; j++) {
+            const t = j / perEdge;
+            targets.push({
+                x: lm[a].x + (lm[b].x - lm[a].x) * t + (Math.random() - 0.5) * 0.03,
+                y: lm[a].y + (lm[b].y - lm[a].y) * t + (Math.random() - 0.5) * 0.03,
+                z: lm[a].z + (lm[b].z - lm[a].z) * t + (Math.random() - 0.5) * 0.02
+            });
+        }
+    }
+    return targets;
+}
+
+function detectFace(video) {
+    if (!faceLandmarker || !faceMode || !video.videoWidth) return;
+    const now = performance.now();
+    if (now - lastFaceDetectTime < 50) return;
+    lastFaceDetectTime = now;
+
+    const results = faceLandmarker.detectForVideo(video, now);
+    const targets = [];
+
+    // Face landmarks
+    if (results.faceLandmarks && results.faceLandmarks.length > 0) {
+        const landmarks = results.faceLandmarks[0];
+        const lm3D = landmarks.map(l => ({
+            x: -(l.x - 0.5) * 7,
+            y: -(l.y - 0.5) * 5.5,
+            z: -l.z * 3
+        }));
+
+        // Count how many particles for face vs hands
+        const numHands = (hands[0].detected ? 1 : 0) + (hands[1].detected ? 1 : 0);
+        const faceShare = numHands > 0 ? 0.6 : 1.0;
+        const faceCount = Math.floor(PARTICLE_COUNT * faceShare);
+        const pointsPerEdge = Math.max(2, Math.floor(faceCount / FACE_EDGES.length));
+
+        for (const [a, b] of FACE_EDGES) {
+            if (a >= lm3D.length || b >= lm3D.length) continue;
+            const pa = lm3D[a];
+            const pb = lm3D[b];
+            for (let j = 0; j < pointsPerEdge; j++) {
+                const t = j / pointsPerEdge;
+                targets.push({
+                    x: pa.x + (pb.x - pa.x) * t + (Math.random() - 0.5) * 0.02,
+                    y: pa.y + (pb.y - pa.y) * t + (Math.random() - 0.5) * 0.02,
+                    z: pa.z + (pb.z - pa.z) * t + (Math.random() - 0.5) * 0.02
+                });
+            }
+        }
+
+        for (let k = 0; k < lm3D.length; k++) {
+            targets.push({
+                x: lm3D[k].x + (Math.random() - 0.5) * 0.03,
+                y: lm3D[k].y + (Math.random() - 0.5) * 0.03,
+                z: lm3D[k].z + (Math.random() - 0.5) * 0.02
+            });
+        }
+    }
+
+    // Hand landmarks (add hand shapes in face mode)
+    const handTargetsCount = Math.floor(PARTICLE_COUNT * 0.2);
+    for (let hi = 0; hi < 2; hi++) {
+        if (hands[hi].detected && hands[hi].landmarks3D.length >= 21) {
+            const ht = getHandShapeTargets(hands[hi], handTargetsCount);
+            targets.push(...ht);
+        }
+    }
+
+    faceTargets = targets;
+}
+
+// --- MEDIAPIPE ---
+let handLandmarker;
+async function initHandTracking() {
+    const { HandLandmarker, FilesetResolver } = await import(
+        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8'
+    );
+    const vision = await FilesetResolver.forVisionTasks(
+        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/wasm'
+    );
+    handLandmarker = await HandLandmarker.createFromOptions(vision, {
+        baseOptions: {
+            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+            delegate: 'GPU'
+        },
+        runningMode: 'VIDEO',
+        numHands: 2,
+        minHandDetectionConfidence: 0.5,
+        minHandPresenceConfidence: 0.5,
+        minTrackingConfidence: 0.5
+    });
+}
+
+let lastDetectTime = 0;
+let wasPinching = [false, false];
+
+function processHandLandmarks(landmarks, handIdx) {
+    const h = hands[handIdx];
+    const palm = landmarks[9];
+    h.prevPos = { ...h.pos };
+    h.pos = {
+        x: -(palm.x - 0.5) * 6,
+        y: -(palm.y - 0.5) * 4.5,
+        z: -palm.z * 2
+    };
+    const dx = h.pos.x - h.prevPos.x;
+    const dy = h.pos.y - h.prevPos.y;
+    h.velocity = Math.min(Math.sqrt(dx * dx + dy * dy), 1);
+
+    const tipIndices = [4, 8, 12, 16, 20];
+    h.fingers = tipIndices.map(idx => ({
+        x: -(landmarks[idx].x - 0.5) * 6,
+        y: -(landmarks[idx].y - 0.5) * 4.5,
+        z: -landmarks[idx].z * 2
+    }));
+
+    // Pinch
+    const thumb = h.fingers[0];
+    const index = h.fingers[1];
+    const pinchDist = Math.sqrt((thumb.x - index.x) ** 2 + (thumb.y - index.y) ** 2);
+    if (pinchDist < 0.15 && !wasPinching[handIdx]) {
+        spawnBurst(h.pos.x, h.pos.y, h.pos.z, 50);
+        wasPinching[handIdx] = true;
+    }
+    if (pinchDist > 0.25) wasPinching[handIdx] = false;
+
+    // Store all 21 landmarks in 3D scene coords
+    h.landmarks3D = landmarks.map(lm => ({
+        x: -(lm.x - 0.5) * 6,
+        y: -(lm.y - 0.5) * 4.5,
+        z: -lm.z * 2
+    }));
+
+    h.isFist = detectFist(landmarks);
+    h.isRock = detectRock(landmarks);
+    h.isPinky = detectPinkyOnly(landmarks);
+
+    // Priority: pinky > rock > fist
+    if (h.isPinky) { h.isFist = false; h.isRock = false; }
+    else if (h.isRock) h.isFist = false;
+
+    h.detected = true;
+}
+
+function detectPinkyOnly(landmarks) {
+    // Only pinky up, all others down
+    const pinkyUp = isFingerUp(landmarks, 20, 17);
+    const indexDown = isFingerDown(landmarks, 8, 5);
+    const middleDown = isFingerDown(landmarks, 12, 9);
+    const ringDown = isFingerDown(landmarks, 16, 13);
+    const thumbDist = Math.sqrt(
+        (landmarks[4].x - landmarks[2].x) ** 2 +
+        (landmarks[4].y - landmarks[2].y) ** 2
+    );
+    const thumbDown = thumbDist < 0.07;
+    return pinkyUp && indexDown && middleDown && ringDown && thumbDown;
+}
+
+function detectHands(video) {
+    if (!handLandmarker || !video.videoWidth) return;
+    const now = performance.now();
+    if (now - lastDetectTime < 33) return;
+    lastDetectTime = now;
+
+    const results = handLandmarker.detectForVideo(video, now);
+
+    // Reset both hands
+    hands[0].detected = false;
+    hands[1].detected = false;
+
+    if (results.landmarks) {
+        for (let hi = 0; hi < results.landmarks.length && hi < 2; hi++) {
+            processHandLandmarks(results.landmarks[hi], hi);
+        }
+    }
+
+    // Update legacy compat variables (combine both hands)
+    const anyDetected = hands[0].detected || hands[1].detected;
+    handDetected = anyDetected;
+
+    if (hands[0].detected && hands[1].detected) {
+        // Average position of both hands
+        handPos = {
+            x: (hands[0].pos.x + hands[1].pos.x) / 2,
+            y: (hands[0].pos.y + hands[1].pos.y) / 2,
+            z: (hands[0].pos.z + hands[1].pos.z) / 2
+        };
+        handVelocity = Math.max(hands[0].velocity, hands[1].velocity);
+        fingerPositions = [...hands[0].fingers, ...hands[1].fingers];
+    } else if (hands[0].detected) {
+        handPos = { ...hands[0].pos };
+        handVelocity = hands[0].velocity;
+        fingerPositions = hands[0].fingers;
+    } else if (hands[1].detected) {
+        handPos = { ...hands[1].pos };
+        handVelocity = hands[1].velocity;
+        fingerPositions = hands[1].fingers;
+    } else {
+        handVelocity *= 0.9;
+    }
+
+    // Pinky activates for 30 seconds on gesture
+    for (let hi = 0; hi < 2; hi++) {
+        const doing = hands[hi].detected && hands[hi].isPinky;
+        if (doing && !wasPinkyGesture[hi] && !pinkyModeActive) {
+            pinkyModeActive = true;
+            pinkyActivateTime = performance.now() / 1000;
+        }
+        wasPinkyGesture[hi] = doing;
+    }
+
+    // Auto-deactivate after 30 seconds
+    if (pinkyModeActive && (performance.now() / 1000 - pinkyActivateTime) > PINKY_DURATION) {
+        pinkyModeActive = false;
+    }
+
+    isPinky = pinkyModeActive && anyDetected;
+
+    // Combined gestures
+    isFist = (hands[0].detected && hands[0].isFist) || (hands[1].detected && hands[1].isFist);
+    isRock = (hands[0].detected && hands[0].isRock) || (hands[1].detected && hands[1].isRock);
+    if (isPinky) { isFist = false; isRock = false; }
+    else if (isRock) isFist = false;
+
+    // Status text
+    const numHands = (hands[0].detected ? 1 : 0) + (hands[1].detected ? 1 : 0);
+    const numFists = (hands[0].detected && hands[0].isFist ? 1 : 0) + (hands[1].detected && hands[1].isFist ? 1 : 0);
+    if (faceMode && faceTargets.length > 0) {
+        const numHandsInFace = (hands[0].detected ? 1 : 0) + (hands[1].detected ? 1 : 0);
+        const txt = numHandsInFace > 0 ? 'Rostro + ' + numHandsInFace + ' mano' + (numHandsInFace > 1 ? 's' : '') : 'Modo Rostro activo';
+        document.getElementById('statusText').textContent = txt;
+        document.getElementById('statusText').style.borderColor = 'rgba(58,134,255,0.8)';
+    } else if (isPinky) {
+        const remaining = Math.ceil(PINKY_DURATION - (performance.now() / 1000 - pinkyActivateTime));
+        document.getElementById('statusText').textContent = 'Mano Fantasma - ' + remaining + 's';
+        document.getElementById('statusText').style.borderColor = 'rgba(0,255,180,0.8)';
+    } else if (isRock) {
+        // handled by updateRockGesture
+    } else if (numFists === 2) {
+        document.getElementById('statusText').textContent = 'Doble esfera!';
+        document.getElementById('statusText').style.borderColor = 'rgba(255,0,200,0.9)';
+    } else if (isFist) {
+        document.getElementById('statusText').textContent = 'Esfera activada!';
+        document.getElementById('statusText').style.borderColor = 'rgba(255,0,110,0.7)';
+    } else if (numHands === 2) {
+        document.getElementById('statusText').textContent = '2 manos detectadas!';
+        document.getElementById('statusText').style.borderColor = 'rgba(6,214,160,0.7)';
+    } else if (numHands === 1) {
+        document.getElementById('statusText').textContent = 'Mano detectada - Mueve tu mano!';
+        document.getElementById('statusText').style.borderColor = 'rgba(6,214,160,0.5)';
+    } else {
+        document.getElementById('statusText').textContent = 'Mueve las manos o disfruta las particulas';
+        document.getElementById('statusText').style.borderColor = 'rgba(255,255,255,0.1)';
+    }
+}
+
+// --- MAIN LOOP ---
+let lastTime = 0;
+function animate(time) {
+    requestAnimationFrame(animate);
+    const dt = Math.min((time - lastTime) / 1000, 0.05);
+    lastTime = time;
+
+    const video = document.getElementById('webcamVideo');
+    detectHands(video);
+    detectFace(video);
+    updateParticles(dt, time);
+    updateRockGesture(time, dt);
+    updateTrail();
+    updateGlow();
+
+    updateFistSphere(time);
+    updateLights(time);
+
+    renderer.render(scene, camera);
+}
+
+// --- INIT ---
+async function start() {
+    document.getElementById('startScreen').style.display = 'none';
+    document.getElementById('loading').style.display = 'flex';
+
+    const video = document.getElementById('webcamVideo');
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: 640, height: 480, facingMode: 'user' }
+        });
+        video.srcObject = stream;
+        await video.play();
+    } catch (e) {
+        alert('No se pudo acceder a la camara. Por favor permite el acceso.');
+        document.getElementById('startScreen').style.display = 'flex';
+        document.getElementById('loading').style.display = 'none';
+        return;
+    }
+
+    initThree();
+    initHandLight2();
+    initTrail();
+    initGlow();
+
+    initFistSphere();
+    spawnFixedParticles(PARTICLE_COUNT);
+
+    await Promise.all([initHandTracking(), initFaceTracking()]);
+
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('ui').style.display = 'block';
+    document.getElementById('controls').style.display = 'flex';
+    document.getElementById('score').style.display = 'block';
+    document.getElementById('particleMenu').style.display = 'flex';
+    document.getElementById('faceBtn').style.display = 'block';
+
+    animate(0);
+}
+
+// --- UI ---
+document.getElementById('startBtn').addEventListener('click', start);
+
+document.getElementById('controls').addEventListener('click', (e) => {
+    if (e.target.dataset.mode) {
+        currentMode = e.target.dataset.mode;
+        document.querySelectorAll('#controls button').forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+        // Recolor all particles
+        for (let i = 0; i < particles.length; i++) {
+            const t = i / particles.length;
+            const c = colorModes[currentMode](t);
+            particles[i].mesh.material.color.copy(c);
+            particles[i].baseColor = c.clone();
+        }
+        if (handDetected) spawnBurst(handPos.x, handPos.y, handPos.z, 80);
+    }
+});
+
+document.getElementById('faceBtn').addEventListener('click', () => {
+    faceMode = !faceMode;
+    const btn = document.getElementById('faceBtn');
+    if (faceMode) {
+        btn.classList.add('active');
+        btn.textContent = 'Rostro ON';
+    } else {
+        btn.classList.remove('active');
+        btn.textContent = 'Modo Rostro';
+        faceTargets = [];
+    }
+});
+
+document.getElementById('particleMenu').addEventListener('click', (e) => {
+    if (e.target.dataset.count) {
+        const count = parseInt(e.target.dataset.count);
+        document.querySelectorAll('#particleMenu button').forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+        setParticleCount(count);
+    }
+});
+
+</script>
+</body>
+</html>
